@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Othello (Reversi)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f0f4f8; /* Light blue-gray background */
+            color: #1e293b; /* Dark slate text */
+            margin: 0;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+        .game-container {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px; /* Max width for the game container */
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 100%;
+            aspect-ratio: 1 / 1; /* Maintain square aspect ratio */
+            border: 2px solid #38a169; /* Darker green border */
+            background-color: #48bb78; /* Green board background */
+            border-radius: 8px;
+            gap: 2px; /* Small gap to show cell borders */
+            margin-bottom: 20px;
+        }
+        .cell {
+            background-color: #68d391; /* Lighter green cells */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 4px; /* Slightly rounded cells */
+            transition: background-color 0.2s ease;
+        }
+        .cell:hover:not(.occupied) {
+            background-color: #9ae6b4; /* Even lighter green on hover for valid moves */
+        }
+        .cell.valid-move-hint {
+            background-color: #a0aec0 !important; /* Gray hint for valid moves */
+            opacity: 0.6;
+        }
+        .piece {
+            width: 80%;
+            height: 80%;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease-out, background-color 0.3s ease;
+        }
+        .piece.player-X {
+            background-color: #1a202c; /* Black piece */
+        }
+        .piece.player-O {
+            background-color: #ffffff; /* White piece */
+            border: 1px solid #cbd5e0; /* Light border for white piece */
+        }
+        .flipped {
+            animation: flip 0.5s ease-in-out;
+        }
+        @keyframes flip {
+            0% { transform: rotateY(0deg); }
+            50% { transform: rotateY(90deg); }
+            100% { transform: rotateY(0deg); } /* Piece color changes mid-animation by JS */
+        }
+
+        .info-panel {
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .info-panel h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #2d3748; /* Darker text for heading */
+        }
+        .scores, .current-player-display {
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+            color: #4a5568; /* Medium gray text */
+        }
+        .scores span {
+            font-weight: 600;
+        }
+        .controls button, .player-selection button {
+            background-color: #4299e1; /* Blue button */
+            color: white;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: background-color 0.2s ease;
+            margin: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .controls button:hover, .player-selection button:hover {
+            background-color: #3182ce; /* Darker blue on hover */
+        }
+        .player-selection {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .player-selection p {
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+        .message-box {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 500;
+            min-height: 40px; /* Ensure consistent height */
+        }
+        .message-box.success {
+            background-color: #c6f6d5; /* Light green for success */
+            color: #2f855a; /* Dark green text */
+        }
+        .message-box.error {
+            background-color: #fed7d7; /* Light red for error */
+            color: #c53030; /* Dark red text */
+        }
+        .message-box.info {
+            background-color: #bee3f8; /* Light blue for info */
+            color: #2b6cb0; /* Dark blue text */
+        }
+        .hidden {
+            display: none;
+        }
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            .game-container {
+                padding: 15px;
+            }
+            .info-panel h2 {
+                font-size: 1.3rem;
+            }
+            .scores, .current-player-display {
+                font-size: 1rem;
+            }
+            .controls button, .player-selection button {
+                padding: 8px 15px;
+                font-size: 0.9rem;
+            }
+            .piece {
+                width: 75%;
+                height: 75%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="info-panel">
+            <h2>Othello (Reversi)</h2>
+            <div class="scores">
+                Puntuación: Negras (X): <span id="score-X">0</span> | Blancas (O): <span id="score-O">0</span>
+            </div>
+            <div class="current-player-display">
+                Turno de: <span id="current-player"></span>
+            </div>
+        </div>
+
+        <div id="player-selection" class="player-selection">
+            <p>¿Quieres ser Negras (X) o Blancas (O)?</p>
+            <button id="select-X">Jugar como Negras (X)</button>
+            <button id="select-O">Jugar como Blancas (O)</button>
+        </div>
+
+        <div id="game-board" class="board hidden"></div>
+
+        <div class="controls">
+            <button id="reset-button">Reiniciar Juego</button>
+            <button id="hint-button" class="hidden">Pedir Pista</button>
+        </div>
+        <div id="message-box" class="message-box">Selecciona tu color para empezar.</div>
+    </div>
+
+    <script>
+        // --- Constants ---
+        const WIDTH = 8;
+        const HEIGHT = 8;
+        const EMPTY = ' ';
+        const PLAYER_X = 'X'; // Black
+        const PLAYER_O = 'O'; // White
+        const DIRECTIONS = [[0, 1], [1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1]];
+
+        // --- Game State ---
+        let board = [];
+        let currentPlayer;
+        let humanPlayer = null;
+        let aiPlayer = null;
+        let gameActive = false;
+
+        // --- DOM Elements ---
+        const boardElement = document.getElementById('game-board');
+        const scoreXElement = document.getElementById('score-X');
+        const scoreOElement = document.getElementById('score-O');
+        const currentPlayerElement = document.getElementById('current-player');
+        const resetButton = document.getElementById('reset-button');
+        const hintButton = document.getElementById('hint-button');
+        const playerSelectionDiv = document.getElementById('player-selection');
+        const selectXButton = document.getElementById('select-X');
+        const selectOButton = document.getElementById('select-O');
+        const messageBox = document.getElementById('message-box');
+
+        // --- Board Functions ---
+        function createBoardArray() {
+            return Array(HEIGHT).fill(null).map(() => Array(WIDTH).fill(EMPTY));
+        }
+
+        function resetBoard() {
+            board = createBoardArray();
+            // Initial pieces
+            board[3][3] = PLAYER_O;
+            board[3][4] = PLAYER_X;
+            board[4][3] = PLAYER_X;
+            board[4][4] = PLAYER_O;
+        }
+
+        function isOnBoard(r, c) {
+            return r >= 0 && r < HEIGHT && c >= 0 && c < WIDTH;
+        }
+
+        function getOtherPlayer(player) {
+            return player === PLAYER_X ? PLAYER_O : PLAYER_X;
+        }
+
+        // --- Game Logic Functions ---
+        function isValidMove(currentBoard, player, rStart, cStart) {
+            if (!isOnBoard(rStart, cStart) || currentBoard[rStart][cStart] !== EMPTY) {
+                return false;
+            }
+
+            const otherPlayer = getOtherPlayer(player);
+            let tilesToFlip = [];
+
+            for (const [dr, dc] of DIRECTIONS) {
+                let r = rStart + dr;
+                let c = cStart + dc;
+                let currentDirectionFlips = [];
+
+                while (isOnBoard(r, c) && currentBoard[r][c] === otherPlayer) {
+                    currentDirectionFlips.push([r, c]);
+                    r += dr;
+                    c += dc;
+                }
+
+                if (isOnBoard(r, c) && currentBoard[r][c] === player && currentDirectionFlips.length > 0) {
+                    tilesToFlip.push(...currentDirectionFlips);
+                }
+            }
+            return tilesToFlip.length > 0 ? tilesToFlip : false;
+        }
+
+        function getValidMoves(currentBoard, player) {
+            const validMoves = [];
+            for (let r = 0; r < HEIGHT; r++) {
+                for (let c = 0; c < WIDTH; c++) {
+                    const tilesToFlip = isValidMove(currentBoard, player, r, c);
+                    if (tilesToFlip) {
+                        validMoves.push({ r, c, tilesToFlip });
+                    }
+                }
+            }
+            return validMoves;
+        }
+
+        function makeMove(currentBoard, player, r, c, tilesToFlip) {
+            currentBoard[r][c] = player;
+            tilesToFlip.forEach(([flipR, flipC]) => {
+                currentBoard[flipR][flipC] = player;
+            });
+        }
+
+        function getScore(currentBoard) {
+            const score = { [PLAYER_X]: 0, [PLAYER_O]: 0 };
+            for (let r = 0; r < HEIGHT; r++) {
+                for (let c = 0; c < WIDTH; c++) {
+                    if (currentBoard[r][c] === PLAYER_X) {
+                        score[PLAYER_X]++;
+                    } else if (currentBoard[r][c] === PLAYER_O) {
+                        score[PLAYER_O]++;
+                    }
+                }
+            }
+            return score;
+        }
+
+        // --- UI Functions ---
+        function renderBoard() {
+            boardElement.innerHTML = ''; // Clear previous board
+            const validMovesForCurrentPlayer = gameActive ? getValidMoves(board, currentPlayer) : [];
+
+            for (let r = 0; r < HEIGHT; r++) {
+                for (let c = 0; c < WIDTH; c++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.r = r;
+                    cell.dataset.c = c;
+
+                    if (board[r][c] !== EMPTY) {
+                        const piece = document.createElement('div');
+                        piece.classList.add('piece', `player-${board[r][c]}`);
+                        cell.appendChild(piece);
+                        cell.classList.add('occupied');
+                    } else {
+                        // Highlight valid moves for the human player
+                        if (gameActive && currentPlayer === humanPlayer) {
+                            const isValid = validMovesForCurrentPlayer.some(move => move.r === r && move.c === c);
+                            if (isValid) {
+                                cell.classList.add('valid-move-hint');
+                                cell.addEventListener('click', handleCellClick);
+                            }
+                        }
+                    }
+                    boardElement.appendChild(cell);
+                }
+            }
+        }
+
+        function updateScores() {
+            const scores = getScore(board);
+            scoreXElement.textContent = scores[PLAYER_X];
+            scoreOElement.textContent = scores[PLAYER_O];
+        }
+
+        function updateCurrentPlayerDisplay() {
+            if (!gameActive) {
+                currentPlayerElement.textContent = "-";
+                return;
+            }
+            const playerText = currentPlayer === PLAYER_X ? "Negras (X)" : "Blancas (O)";
+            let turnText = `Turno de: ${playerText}`;
+            if (currentPlayer === aiPlayer) {
+                turnText += " (AI)";
+            }
+            currentPlayerElement.textContent = turnText;
+        }
+
+        function showMessage(text, type = 'info') {
+            messageBox.textContent = text;
+            messageBox.className = 'message-box'; // Reset classes
+            messageBox.classList.add(type);
+        }
+
+
+        function animateFlip(r, c, newPlayer) {
+            const cell = boardElement.querySelector(`.cell[data-r='${r}'][data-c='${c}']`);
+            if (cell && cell.firstChild) {
+                const piece = cell.firstChild;
+                piece.classList.add('flipped');
+                // Change color partway through animation for better visual effect
+                setTimeout(() => {
+                    piece.className = `piece player-${newPlayer} flipped`;
+                }, 150); // Adjust timing if needed
+                piece.addEventListener('animationend', () => {
+                    piece.classList.remove('flipped');
+                }, { once: true });
+            }
+        }
+
+        // --- Game Flow & AI ---
+        function handleCellClick(event) {
+            if (!gameActive || currentPlayer !== humanPlayer) return;
+
+            const r = parseInt(event.currentTarget.dataset.r);
+            const c = parseInt(event.currentTarget.dataset.c);
+
+            const validMoves = getValidMoves(board, humanPlayer);
+            const move = validMoves.find(m => m.r === r && m.c === c);
+
+            if (move) {
+                performMove(humanPlayer, r, c, move.tilesToFlip);
+            } else {
+                showMessage("Movimiento inválido.", "error");
+            }
+        }
+
+        function performMove(player, r, c, tilesToFlip) {
+            if (!gameActive) return;
+
+            // Animate the main piece placement
+            board[r][c] = player; // Temporarily set for animation
+            renderBoard(); // Re-render to show the new piece immediately
+            const newPieceCell = boardElement.querySelector(`.cell[data-r='${r}'][data-c='${c}']`);
+            if(newPieceCell && newPieceCell.firstChild) {
+                 newPieceCell.firstChild.classList.add('flipped'); // Use flip for new piece too
+                 setTimeout(() => {
+                    if(newPieceCell.firstChild) newPieceCell.firstChild.classList.remove('flipped');
+                 }, 500);
+            }
+
+
+            // Animate flipped pieces
+            tilesToFlip.forEach(([flipR, flipC]) => {
+                // The color change will happen via makeMove and re-render,
+                // but we trigger animation on the old piece.
+                animateFlip(flipR, flipC, player);
+            });
+
+
+            // After a short delay for animations to start, update the board state and re-render
+            setTimeout(() => {
+                makeMove(board, player, r, c, tilesToFlip); // This updates the board array
+                renderBoard(); // Full re-render with correct final states
+                updateScores();
+
+                if (checkGameOver()) return;
+
+                currentPlayer = getOtherPlayer(player);
+                updateCurrentPlayerDisplay();
+                nextTurn();
+            }, 300); // Delay to allow flip animation to be visible before full logic proceeds
+        }
+
+
+        function getComputerMoveGreedy(currentBoard, player, validMovesList) {
+            if (!validMovesList || validMovesList.length === 0) {
+                return null;
+            }
+
+            let bestMove = null;
+            let maxFlips = -1;
+
+            const corners = [[0, 0], [0, WIDTH - 1], [HEIGHT - 1, 0], [HEIGHT - 1, WIDTH - 1]];
+            for (const move of validMovesList) {
+                if (corners.some(corner => corner[0] === move.r && corner[1] === move.c)) {
+                    showMessage(`AI (${player}) juega en la esquina: ${move.r+1}${String.fromCharCode(65+move.c)}`, "info");
+                    return move;
+                }
+            }
+
+            for (const move of validMovesList) {
+                if (move.tilesToFlip.length > maxFlips) {
+                    maxFlips = move.tilesToFlip.length;
+                    bestMove = move;
+                } else if (move.tilesToFlip.length === maxFlips) {
+                    if (Math.random() < 0.5) { // If tie, choose randomly
+                        bestMove = move;
+                    }
+                }
+            }
+             if (bestMove) {
+                showMessage(`AI (${player}) juega: ${bestMove.r+1}${String.fromCharCode(65+bestMove.c)}`, "info");
+            }
+            return bestMove;
+        }
+
+        function nextTurn() {
+            if (!gameActive) return;
+
+            updateCurrentPlayerDisplay();
+            renderBoard(); // Re-render to show valid moves for the new current player
+
+            const validMoves = getValidMoves(board, currentPlayer);
+
+            if (validMoves.length === 0) {
+                showMessage(`Jugador ${currentPlayer} no tiene movimientos válidos y pasa.`, "info");
+                currentPlayer = getOtherPlayer(currentPlayer);
+                updateCurrentPlayerDisplay();
+                const otherPlayerValidMoves = getValidMoves(board, currentPlayer);
+                if (otherPlayerValidMoves.length === 0) {
+                    endGame("Ningún jugador tiene movimientos válidos.");
+                    return;
+                }
+                // Give a small delay before the next player (especially if it's AI again)
+                setTimeout(nextTurn, 1000);
+                return;
+            }
+
+            if (currentPlayer === aiPlayer) {
+                hintButton.classList.add('hidden'); // Hide hint button during AI's turn
+                showMessage("AI está pensando...", "info");
+                // AI's turn
+                setTimeout(() => { // Simulate thinking time
+                    const aiMove = getComputerMoveGreedy(board, aiPlayer, validMoves);
+                    if (aiMove) {
+                        performMove(aiPlayer, aiMove.r, aiMove.c, aiMove.tilesToFlip);
+                    } else {
+                         // This case should ideally be caught by validMoves.length === 0 above
+                        showMessage(`AI (${currentPlayer}) pasa (inesperado).`, "error");
+                        currentPlayer = getOtherPlayer(currentPlayer);
+                        nextTurn();
+                    }
+                }, 1500);
+            } else {
+                // Human player's turn
+                hintButton.classList.remove('hidden');
+                showMessage(`Tu turno, Jugador ${humanPlayer}. Haz clic en una casilla resaltada.`, "info");
+            }
+        }
+
+        function checkGameOver() {
+            const scores = getScore(board);
+            if (scores[PLAYER_X] + scores[PLAYER_O] === WIDTH * HEIGHT) {
+                endGame("El tablero está lleno.");
+                return true;
+            }
+            // Game over if no player can move is handled in nextTurn
+            return false;
+        }
+
+        function endGame(reason) {
+            gameActive = false;
+            hintButton.classList.add('hidden');
+            renderBoard(); // Render final board without hints
+
+            const finalScores = getScore(board);
+            let message = `${reason} ¡Fin del juego! Puntuación Final: Negras (X): ${finalScores[PLAYER_X]}, Blancas (O): ${finalScores[PLAYER_O]}. `;
+
+            if (finalScores[PLAYER_X] > finalScores[PLAYER_O]) {
+                message += "¡Ganan las Negras (X)!";
+            } else if (finalScores[PLAYER_O] > finalScores[PLAYER_X]) {
+                message += "¡Ganan las Blancas (O)!";
+            } else {
+                message += "¡Es un empate!";
+            }
+            showMessage(message, "success");
+            currentPlayerElement.textContent = "Juego Terminado";
+        }
+
+        function startGame() {
+            if (!humanPlayer) {
+                showMessage("Por favor, selecciona si quieres ser X o O.", "error");
+                return;
+            }
+            gameActive = true;
+            playerSelectionDiv.classList.add('hidden');
+            boardElement.classList.remove('hidden');
+            if (humanPlayer === PLAYER_X) { // Only show hint if it's human's turn
+                 hintButton.classList.remove('hidden');
+            } else {
+                 hintButton.classList.add('hidden');
+            }
+
+
+            resetBoard();
+            currentPlayer = PLAYER_X; // X always starts
+            updateScores();
+            showMessage(`Juego iniciado. Eres ${humanPlayer}. ${PLAYER_X} empieza.`, "info");
+            nextTurn(); // This will call renderBoard and handle AI's first move if P2
+        }
+
+        // --- Event Listeners ---
+        resetButton.addEventListener('click', () => {
+            humanPlayer = null;
+            aiPlayer = null;
+            gameActive = false;
+            playerSelectionDiv.classList.remove('hidden');
+            boardElement.classList.add('hidden');
+            hintButton.classList.add('hidden');
+            resetBoard(); // Reset data
+            renderBoard(); // Clear visual board
+            updateScores(); // Reset scores display
+            currentPlayerElement.textContent = "-";
+            showMessage("Juego reiniciado. Selecciona tu color.", "info");
+        });
+
+        hintButton.addEventListener('click', () => {
+            if (!gameActive || currentPlayer !== humanPlayer) return;
+            const validMoves = getValidMoves(board, humanPlayer);
+            if (validMoves.length > 0) {
+                const hintMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+                // Highlight the hint move
+                const hintedCell = boardElement.querySelector(`.cell[data-r='${hintMove.r}'][data-c='${hintMove.c}']`);
+                if (hintedCell) {
+                    hintedCell.style.backgroundColor = '#fbd38d'; // Orange hint
+                    setTimeout(() => {
+                         if(hintedCell.classList.contains('valid-move-hint')) { // Check if it's still a valid spot
+                            hintedCell.style.backgroundColor = ''; // Reset after a bit
+                         }
+                    }, 1000);
+                }
+                showMessage(`Pista: Intenta ${hintMove.r+1}${String.fromCharCode(65+hintMove.c)}`, "info");
+            } else {
+                showMessage("No hay movimientos disponibles para una pista.", "info");
+            }
+        });
+
+        selectXButton.addEventListener('click', () => {
+            humanPlayer = PLAYER_X;
+            aiPlayer = PLAYER_O;
+            startGame();
+        });
+
+        selectOButton.addEventListener('click', () => {
+            humanPlayer = PLAYER_O;
+            aiPlayer = PLAYER_X;
+            startGame();
+        });
+
+        // --- Initial Setup ---
+        // Render empty board initially (or hide it until player selects)
+        resetBoard(); // Initialize board data structure
+        renderBoard(); // Render it (will be empty cells)
+        updateScores();
+        updateCurrentPlayerDisplay();
+
+    </script>
+</body>
+</html>
